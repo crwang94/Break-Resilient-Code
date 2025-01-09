@@ -62,6 +62,7 @@ class BRCodec:
         # print(f"[CODEC] {self.t}-break-resilient code with k={self.k} (l={self.l}, m={self.m}),  n={self.n}, and rate={self.k/self.n}")
 
     def __generate_random_iw(self):
+        # return "100110000110000110100000100111001011001000011100000000000100111001110110001001110010010001110111101010111110011110110001"
         return "".join(random.choice("01") for _ in range(self.k))
 
     def __encode_distinct_blocks(self, data):
@@ -72,7 +73,14 @@ class BRCodec:
             while j <= i_end:
                 if data[i - 1] == data[j - 1]:
                     del data[j - 1]
-                    occupied_indices = list(set([int(data[r - 1][: ceil(log2(self.l)) + 1], 2) for r in range(1, self.l)]))
+                    occupied_indices = list(
+                        set(
+                            [
+                                int(data[r - 1][: ceil(log2(self.l)) + 1], 2)
+                                for r in range(1, self.l)
+                            ]
+                        )
+                    )
                     occupied_indices.sort()
                     j0 = 0
                     for _ in range(j):
@@ -80,7 +88,9 @@ class BRCodec:
                         while j0 in occupied_indices:
                             j0 = j0 + 1
 
-                    new_block = self.br(j0, ceil(log2(self.l)) + 1) + self.br(i, ceil(log2(self.l)))
+                    new_block = self.br(j0, ceil(log2(self.l)) + 1) + self.br(
+                        i, ceil(log2(self.l))
+                    )
                     while len(new_block) < self.m:
                         new_block += "0"
                     data.append(new_block)
@@ -91,23 +101,29 @@ class BRCodec:
 
     def __decode_distinct_blocks(self, data):
         while data[-1][-1] == "0":
-            last_block = data[-1]
-            j0 = int(last_block[: ceil(log2(self.l)) + 1], 2)
-            i = int(last_block[ceil(log2(self.l)) + 1 : 2 * ceil(log2(self.l)) + 1], 2)
+            j0 = int(data[-1][: ceil(log2(self.l)) + 1], 2)
+            i = int(data[-1][ceil(log2(self.l)) + 1 : 2 * ceil(log2(self.l)) + 1], 2)
             j = j0
-            occupied_indices = list(set([int(data[r - 1][: ceil(log2(self.l)) + 1], 2) for r in range(1, self.l)]))
-            occupied_indices.sort()
+            occupied_indices = set(
+                [int(r[: ceil(log2(self.l)) + 1], 2) for r in data[: self.l]]
+            )
+            # print(occupied_indices)
+            # occupied_indices.sort()
             for s in range(1, j0):
                 if s in occupied_indices:
                     j = j - 1
 
-            data = reduce(
-                lambda x, y: x + y,
-                [data[r - 1] for r in range(1, j)] + [data[i - 1]] + [data[r - 1] for r in range(j, self.l)],
-            )
-        print(data)
+            data = data[: j - 1] + [data[i - 1]] + data[j - 1 : -1]
 
-        return data[:-1]
+            # data=[data[r - 1] for r in range(1, j)] + [data[i - 1]] + [data[r - 1] for r in range(j, self.l)],
+
+            # data = reduce(
+            #     lambda x, y: x + y,
+            #     [data[r - 1] for r in range(1, j)] + [data[i - 1]] + [data[r - 1] for r in range(j, self.l)],
+            # )
+        # print(data)
+
+        return data
 
     def __encode_rll_single(self, w: str, max_allowence=None) -> str:
         if max_allowence is None:
@@ -139,7 +155,9 @@ class BRCodec:
         while chunk[-1] != "1":
             chunk = chunk[:-1]
             index = int(chunk[-max_allowence:], 2) - 1
-            chunk = chunk[:index] + "0" * (max_allowence + 1) + chunk[index:-max_allowence]
+            chunk = (
+                chunk[:index] + "0" * (max_allowence + 1) + chunk[index:-max_allowence]
+            )
         return chunk[:-1]
 
     def __encode_mu(self, iw):
@@ -161,15 +179,27 @@ class BRCodec:
             print("[ENCODE] Error: Information word is longer than k.")
             return
         iw1 = iw + "0" * (self.k - len(iw)) + "1"
-        data = self.__encode_distinct_blocks(self.identifiers + [iw1[ll : ll + self.m] for ll in range(self.l - self.t)])
-        print(data)
+        data = self.__encode_distinct_blocks(
+            self.identifiers
+            + [iw1[ll * self.m : (ll + 1) * self.m] for ll in range(self.l - self.t)]
+        )
+
+        # print(
+        #     self.identifiers
+        #     + [iw1[ll * self.m : (ll + 1) * self.m] for ll in range(self.l - self.t)]
+        # )
+        # [print(int(d,2)) for d in data]
         # create the kv-store \textt{next}
         next_kv = [i for i in range(2**self.m)]
         for i in range(self.t + 1, self.l):
             next_kv[int(data[i - 1], 2)] = int(data[i], 2)
 
         # create parities from \textt{next}
-        parities = [self.br(parity, self.m + 1) for parity in self.rscodec.encode(next_kv)[-4 * self.t :]]
+        parities = [
+            self.br(parity, self.m + 1)
+            for parity in self.rscodec.encode(next_kv)[-4 * self.t :]
+        ]
+        # print(self.rscodec.encode(next_kv)[-4 * self.t :])
         # encode every makers
         components = [self.__encode_mu(marker) for marker in data]
         # encode parities with RLL and insert them in between of identifiers
@@ -202,25 +232,39 @@ class BRCodec:
             # print("Checking: " + fragment)
             i = 0
             chunks = []
-            while i + self.len_mu_cw <= len(fragment):  # check if the length of remaining part is shorter than a mu code.
+            while i + self.len_mu_cw <= len(
+                fragment
+            ):  # check if the length of remaining part is shorter than a mu code.
                 window = fragment[i : i + self.len_mu_cw]  # check for the window
                 if self._is_mu_cw(window):  # if it's a MU code
                     i = i + self.len_mu_cw
-                    block_int = int(self.__decode_mu(window), 2)  # decode the mu code and check if it's an identifier
+                    block_int = int(
+                        self.__decode_mu(window), 2
+                    )  # decode the mu code and check if it's an identifier
                     if block_int < self.t:  # It is an identifier ...
                         # print(f"Find identifier {block_int}, \nchekcing its back")
-                        j = i - self.len_mu_cw - (self.m + 1)
+                        j = i - self.len_mu_cw - (self.m + 2)
                         for n_pre_chunk in range(3):
-                            start = j - (self.m + 2) * n_pre_chunk
+                            start = j - (self.m + 3) * n_pre_chunk
                             if start < 0:
                                 break
-                            rss[block_int - n_pre_chunk - 1] = int(self.__decode_rll_single(fragment[start : start + self.m + 1]))
+                            rss[4 * block_int - n_pre_chunk - 1] = int(
+                                self.__decode_rll_single(
+                                    fragment[start : start + self.m + 2]
+                                ),
+                                2,
+                            )
                         # print("chekcing its next")
                         ip = i
                         for idx in range(4):
                             if ip + self.m + 2 >= len(fragment):
                                 break
-                            rss[block_int + idx] = int(self.__decode_rll_single(fragment[ip : ip + self.m + 2]), 2)
+                            rss[4 * block_int + idx] = int(
+                                self.__decode_rll_single(
+                                    fragment[ip : ip + self.m + 2]
+                                ),
+                                2,
+                            )
                             # print(f"data is {fragment[ip : ip + self.m + 2]}, decoded is {rss[block_int + idx]}")
                             ip += self.m + 3
                         # print(f"Done for identifier {block_int}")
@@ -234,15 +278,17 @@ class BRCodec:
                 approx_next_kv[b] = b_next
         to_be_decoded = approx_next_kv + rss
 
-        print("ERR vs RSS:", num_error, rss)
-
+        # print("ERR vs", num_error, rss)
         next_kv = self.rscodec.decode(
             to_be_decoded,
-            erase_pos=[len(approx_next_kv) + pos for pos in [i for i in range(self.t * 4) if rss[i] == -1]],
+            erase_pos=[
+                len(approx_next_kv) + pos
+                for pos in [i for i in range(self.t * 4) if rss[i] == -1]
+            ],
         )[0]
 
         blockss = [[i, next_kv[i]] for i in range(len(next_kv)) if i != next_kv[i]]
-
+        # print(blockss)
         while len(blockss) > 1:
             for i, j in itertools.permutations(range(len(blockss)), 2):
                 if blockss[i] and blockss[j] and blockss[i][-1] == blockss[j][0]:
@@ -251,11 +297,15 @@ class BRCodec:
             blockss = [block for block in blockss if block]
 
         # print([self.br(element, self.m + 1) for element in blockss[0]])
-        data = self.identifiers + [self.br(element, self.m + 1)[1:] for element in blockss[0]]
-        print(data)
+        data = self.identifiers + [
+            self.br(element, self.m + 1)[1:] for element in blockss[0]
+        ]
+        # print(data)
+
+        new_data = self.__decode_distinct_blocks(data)[self.t :]
+        # print("hi", new_data)
 
         return ("".join(self.__decode_distinct_blocks(data)[self.t :]))[:-1]
-        print("".join(self.__decode_distinct_blocks(data)[self.t + 1 :]))
 
     def randomly_break_codeword(self, cw: str) -> list[str]:
         fragments = []
@@ -270,33 +320,18 @@ class BRCodec:
         return fragments
 
     def break_test(self):
-        d = 1
+        d = 1000
         for i in range(d):
             if i % 10 == 0:
-                print(i, "/", d)
+                print(f"Test {i}/{d}", end="\r")
             iw = self.__generate_random_iw()
 
             cw = self.brc_encode(iw)
 
             fgs = self.randomly_break_codeword(cw)
+            # [print(fg) for fg in fgs]
             decoded_iw = self.brc_decode(fgs)
-
-            print(f"     iw: ", iw)
-            print(f"decoded: ", decoded_iw)
-
-            # if decoded_iw != iw:
-            #     print(decoded_iw.to01())
-            #     print(iw.to01())
-            #     break
-
-
-if __name__ == "__main__":
-
-    # k = 120, n=425 (3-break), 353 (2-break), 281 (1-break)
-    fc = BRCodec(l=12, m=11, t=1)
-    fc.break_test()
-
-    # Robert_Heinlein = "010100100110111101100010011001010111001001110100001000000100100001100101011010010110111001101100011001010110100101101110"
-
-    # cw = fc.brc_encode(Robert_Heinlein)
-    # print(cw.to01())
+            if iw != decoded_iw:
+                print(f"     iw: ", iw)
+                print(f"decoded: ", decoded_iw)
+                break
