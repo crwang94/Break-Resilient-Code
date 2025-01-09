@@ -59,7 +59,9 @@ class BRCodec:
 
         self.identifiers = [self.br(r, self.m) for r in range(self.t)]
         self.rscodec = reedsolo.RSCodec(4 * self.t, c_exp=self.m + 1)
-        # print(f"[CODEC] {self.t}-break-resilient code with k={self.k} (l={self.l}, m={self.m}),  n={self.n}, and rate={self.k/self.n}")
+        print(
+            f"[CODEC] {self.t}-break-resilient code with k={self.k} (l={self.l}, m={self.m}),  n={self.n}, and rate={self.k/self.n}"
+        )
 
     def __generate_random_iw(self):
         # return "100110000110000110100000100111001011001000011100000000000100111001110110001001110010010001110111101010111110011110110001"
@@ -274,11 +276,13 @@ class BRCodec:
                 else:  # if it's not a MU code
                     i = i + 1
             for b, b_next in zip(chunks[:-1], chunks[1:]):
+                if approx_next_kv[b] != b:
+                    continue
                 num_error = num_error - 1
                 approx_next_kv[b] = b_next
         to_be_decoded = approx_next_kv + rss
 
-        # print("ERR vs", num_error, rss)
+        print("ERR vs", num_error, rss)
         next_kv = self.rscodec.decode(
             to_be_decoded,
             erase_pos=[
@@ -335,3 +339,15 @@ class BRCodec:
                 print(f"     iw: ", iw)
                 print(f"decoded: ", decoded_iw)
                 break
+
+
+if __name__ == "__main__":
+
+    # k = 120, n=425 (3-break), 353 (2-break), 281 (1-break)
+    fc = BRCodec(l=16, m=11, t=5)
+    fc.break_test()
+
+    Robert_Heinlein = "010100100110111101100010011001010111001001110100001000000100100001100101011010010110111001101100011001010110100101101110"
+
+    cw = fc.brc_encode(Robert_Heinlein)
+    print(cw.to01())
