@@ -59,9 +59,7 @@ class BRCodec:
 
         self.identifiers = [self.br(r, self.m) for r in range(self.t)]
         self.rscodec = reedsolo.RSCodec(4 * self.t, c_exp=self.m + 1)
-        print(
-            f"[CODEC] {self.t}-break-resilient code with k={self.k} (l={self.l}, m={self.m}),  n={self.n}, and rate={self.k/self.n}"
-        )
+        print(f"[CODEC] {self.t}-break-resilient code with k={self.k} (l={self.l}, m={self.m}),  n={self.n}, and rate={self.k/self.n}")
 
     def __generate_random_iw(self):
         # return "100110000110000110100000100111001011001000011100000000000100111001110110001001110010010001110111101010111110011110110001"
@@ -75,14 +73,7 @@ class BRCodec:
             while j <= i_end:
                 if data[i - 1] == data[j - 1]:
                     del data[j - 1]
-                    occupied_indices = list(
-                        set(
-                            [
-                                int(data[r - 1][: ceil(log2(self.l)) + 1], 2)
-                                for r in range(1, self.l)
-                            ]
-                        )
-                    )
+                    occupied_indices = list(set([int(data[r - 1][: ceil(log2(self.l)) + 1], 2) for r in range(1, self.l)]))
                     occupied_indices.sort()
                     j0 = 0
                     for _ in range(j):
@@ -90,9 +81,7 @@ class BRCodec:
                         while j0 in occupied_indices:
                             j0 = j0 + 1
 
-                    new_block = self.br(j0, ceil(log2(self.l)) + 1) + self.br(
-                        i, ceil(log2(self.l))
-                    )
+                    new_block = self.br(j0, ceil(log2(self.l)) + 1) + self.br(i, ceil(log2(self.l)))
                     while len(new_block) < self.m:
                         new_block += "0"
                     data.append(new_block)
@@ -106,9 +95,7 @@ class BRCodec:
             j0 = int(data[-1][: ceil(log2(self.l)) + 1], 2)
             i = int(data[-1][ceil(log2(self.l)) + 1 : 2 * ceil(log2(self.l)) + 1], 2)
             j = j0
-            occupied_indices = set(
-                [int(r[: ceil(log2(self.l)) + 1], 2) for r in data[: self.l]]
-            )
+            occupied_indices = set([int(r[: ceil(log2(self.l)) + 1], 2) for r in data[: self.l]])
             # print(occupied_indices)
             # occupied_indices.sort()
             for s in range(1, j0):
@@ -157,9 +144,7 @@ class BRCodec:
         while chunk[-1] != "1":
             chunk = chunk[:-1]
             index = int(chunk[-max_allowence:], 2) - 1
-            chunk = (
-                chunk[:index] + "0" * (max_allowence + 1) + chunk[index:-max_allowence]
-            )
+            chunk = chunk[:index] + "0" * (max_allowence + 1) + chunk[index:-max_allowence]
         return chunk[:-1]
 
     def __encode_mu(self, iw):
@@ -181,10 +166,7 @@ class BRCodec:
             print("[ENCODE] Error: Information word is longer than k.")
             return
         iw1 = iw + "0" * (self.k - len(iw)) + "1"
-        data = self.__encode_distinct_blocks(
-            self.identifiers
-            + [iw1[ll * self.m : (ll + 1) * self.m] for ll in range(self.l - self.t)]
-        )
+        data = self.__encode_distinct_blocks(self.identifiers + [iw1[ll * self.m : (ll + 1) * self.m] for ll in range(self.l - self.t)])
 
         # print(
         #     self.identifiers
@@ -197,10 +179,7 @@ class BRCodec:
             next_kv[int(data[i - 1], 2)] = int(data[i], 2)
 
         # create parities from \textt{next}
-        parities = [
-            self.br(parity, self.m + 1)
-            for parity in self.rscodec.encode(next_kv)[-4 * self.t :]
-        ]
+        parities = [self.br(parity, self.m + 1) for parity in self.rscodec.encode(next_kv)[-4 * self.t :]]
         # print(self.rscodec.encode(next_kv)[-4 * self.t :])
         # encode every makers
         components = [self.__encode_mu(marker) for marker in data]
@@ -234,15 +213,11 @@ class BRCodec:
             # print("Checking: " + fragment)
             i = 0
             chunks = []
-            while i + self.len_mu_cw <= len(
-                fragment
-            ):  # check if the length of remaining part is shorter than a mu code.
+            while i + self.len_mu_cw <= len(fragment):  # check if the length of remaining part is shorter than a mu code.
                 window = fragment[i : i + self.len_mu_cw]  # check for the window
                 if self._is_mu_cw(window):  # if it's a MU code
                     i = i + self.len_mu_cw
-                    block_int = int(
-                        self.__decode_mu(window), 2
-                    )  # decode the mu code and check if it's an identifier
+                    block_int = int(self.__decode_mu(window), 2)  # decode the mu code and check if it's an identifier
                     if block_int < self.t:  # It is an identifier ...
                         # print(f"Find identifier {block_int}, \nchekcing its back")
                         j = i - self.len_mu_cw - (self.m + 2)
@@ -251,9 +226,7 @@ class BRCodec:
                             if start < 0:
                                 break
                             rss[4 * block_int - n_pre_chunk - 1] = int(
-                                self.__decode_rll_single(
-                                    fragment[start : start + self.m + 2]
-                                ),
+                                self.__decode_rll_single(fragment[start : start + self.m + 2]),
                                 2,
                             )
                         # print("chekcing its next")
@@ -262,9 +235,7 @@ class BRCodec:
                             if ip + self.m + 2 >= len(fragment):
                                 break
                             rss[4 * block_int + idx] = int(
-                                self.__decode_rll_single(
-                                    fragment[ip : ip + self.m + 2]
-                                ),
+                                self.__decode_rll_single(fragment[ip : ip + self.m + 2]),
                                 2,
                             )
                             # print(f"data is {fragment[ip : ip + self.m + 2]}, decoded is {rss[block_int + idx]}")
@@ -280,19 +251,22 @@ class BRCodec:
                     continue
                 num_error = num_error - 1
                 approx_next_kv[b] = b_next
+
+        if 2 * num_error > len([i for i in range(self.t * 4) if rss[i] != -1]):
+            # print(f"Decoding Failure: No enough redundancy symbols,", num_error, rss)
+            return None
+
         to_be_decoded = approx_next_kv + rss
 
-        print("ERR vs", num_error, rss)
-        next_kv = self.rscodec.decode(
-            to_be_decoded,
-            erase_pos=[
-                len(approx_next_kv) + pos
-                for pos in [i for i in range(self.t * 4) if rss[i] == -1]
-            ],
-        )[0]
-
+        try:
+            next_kv = self.rscodec.decode(
+                to_be_decoded,
+                erase_pos=[len(approx_next_kv) + pos for pos in [i for i in range(self.t * 4) if rss[i] == -1]],
+            )[0]
+        except reedsolo.ReedSolomonError as e:
+            print(f"Decoding Failure: {e}")
+            return None
         blockss = [[i, next_kv[i]] for i in range(len(next_kv)) if i != next_kv[i]]
-        # print(blockss)
         while len(blockss) > 1:
             for i, j in itertools.permutations(range(len(blockss)), 2):
                 if blockss[i] and blockss[j] and blockss[i][-1] == blockss[j][0]:
@@ -301,13 +275,8 @@ class BRCodec:
             blockss = [block for block in blockss if block]
 
         # print([self.br(element, self.m + 1) for element in blockss[0]])
-        data = self.identifiers + [
-            self.br(element, self.m + 1)[1:] for element in blockss[0]
-        ]
+        data = self.identifiers + [self.br(element, self.m + 1)[1:] for element in blockss[0]]
         # print(data)
-
-        new_data = self.__decode_distinct_blocks(data)[self.t :]
-        # print("hi", new_data)
 
         return ("".join(self.__decode_distinct_blocks(data)[self.t :]))[:-1]
 
